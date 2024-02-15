@@ -1,63 +1,68 @@
 #!/bin/bash
 
-search_files() {
-  local dir="$1"
-  local pattern="$2"
+# Проверяем, передан ли аргумент
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <filename1> [<filename2> <filename3> ...]"
+    exit 1
+fi
 
-  local files=()  # массив для хранения директорий
+# Функция для поиска файла в директории
+search_file() {
+    local filename="$1"
+    local dir="$2"
 
-  for file in "$dir"/*; do
-    if [[ -d "$file" ]]; then
-      # если директория, то ищем в ней
-      search_files "$file" "$pattern"
-    elif [[ -f "$file" ]]; then
-      # если файл, то проверяем соответсвие регулярке
-      if [[ "$file" =~ $pattern ]]; then
-        files+=("$file")
-      fi
+    # Переменная для хранения суммы байтов файла
+    local total_bytes=0
+
+    # Перебираем все файлы и директории в текущей директории
+    for entry in "$dir"/*; do
+        if [ -f "$entry" ]; then
+            # Если это файл и его имя совпадает с искомым, выводим его содержимое с заголовком и считаем сумму байтов
+            if [ "$(basename "$entry")" = "$filename" ]; then
+                echo "Found: $entry"
+                print_file_content_with_header "$entry"
+                # Считаем сумму байтов файла и добавляем к общей сумме
+                local bytes=$(wc -c < "$entry")
+                total_bytes=$((total_bytes + bytes))
+            fi
+        elif [ -d "$entry" ]; then
+            # Если это директория, рекурсивно вызываем эту же функцию для неё
+            search_file "$filename" "$entry"
+        fi
+    done
+
+    # Если файлы не найдены, выводим сообщение об этом
+    if [ $total_bytes -ne 0 ]; then
+        # Выводим сумму байтов файла
+        echo "Total bytes for $filename: $total_bytes"
     fi
-  done
-
-  echo "${files[@]}"
 }
 
-# проверка аргументов
-if [ "$#" -ne 1 ]; then
-  echo "Использование: $0 <регулярное_выражение>"
-  exit 1
-fi
+# Функция для вывода содержимого файла с заданным заголовком
+print_file_content_with_header() {
+    local file="$1"
+    local header="#!/bin/bash"  # Укажите ваш заголовок здесь
 
-root_directory="/home/"
+    # Проверяем, содержит ли файл заданный заголовок
+    if head -n1 "$file" | grep -q "^$header$"; then
+        echo "=== Content of $file ==="
+        # Выводим содержимое файла с пронумерованными строками
+        cat -n "$file"
+        echo "========================="
+    fi
+}
 
-regex="$1"
+# Функция для поиска нескольких файлов из списка
+search_files() {
+    local filenames=("$@")
+    local dir="$1"
+    shift
 
-# ищем файлы и сохраняем в массив
-found_files=($(search_files "$root_directory" "$regex"))
+    # Перебираем все имена файлов из списка
+    for filename in "${filenames[@]}"; do
+        search_file "$filename" "$dir"
+    done
+}
 
-# проверка наличия файлов
-if [ ${#found_files[@]} -eq 0 ]; then
-  echo "Файлы не найдены."
-  exit 0  
-fi
-
-echo -e "\nНайденные файлы:"
-for ((i=0; i<${#found_files[@]}; i++)); do
-  echo "$i: ${found_files[$i]}"
-  echo "$i: ${found_files[$i]}" >> "save.txt"
-done
-
-read -p "Выберите номер файла для выполнения команды: " selected_file_index
-
-# проверка на число + нахождение в пределах массива
-if [[ "$selected_file_index" =~ ^[0-9]+$ && "$selected_file_index" -ge 0 && "$selected_file_index" -lt ${#found_files[@]} ]]; then
-  selected_file="${found_files[$selected_file_index]}"
-  echo "Выбран файл: $selected_file"
-
-  # запрашиваем команду
-  read -p "Введите команду для выполнения с файлом: " user_command
-
-  eval "$user_command" "$selected_file"
-else
-  echo "Некорректный номер файла."
-  exit 1
-fi
+# Вызываем функцию для начала поиска с текущей директории
+search_files "$(pwd)" "$@"
