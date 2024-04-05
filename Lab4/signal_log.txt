@@ -1,0 +1,4 @@
+Daemon started on Process ID: {3222}. Waiting for signals...
+Process 3222 tracks signal 12
+Process 3222 tracks signal 10
+Stopped Process ID: 3222
